@@ -36,15 +36,19 @@ output "frontend_ecr_url" {
   value = aws_ecr_repository.frontend.repository_url
 }
 
-output "backend_ecr_url" {
-  value = aws_ecr_repository.backend.repository_url
+output "proyectos_backend_ecr_url" {
+  value = aws_ecr_repository.proyectos_backend.repository_url
+}
+
+output "avances_backend_ecr_url" {
+  value = aws_ecr_repository.avances_backend.repository_url
 }
 
 output "security_summary" {
   value = <<-EOT
   Frontend: publico por HTTP/HTTPS. SSH solo desde admin_cidr.
-  Backend: privado, puerto 8080 solo desde el Security Group del Frontend.
-  Data: privado, puerto 3306 solo desde el Security Group del Backend.
+  Backend privado: puerto 8080 para Proyectos y 8081 para Avances, ambos solo desde el Security Group del Frontend.
+  Data privada: puerto 3306 solo desde el Security Group del Backend.
   EOT
 }
 

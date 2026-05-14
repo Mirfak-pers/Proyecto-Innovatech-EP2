@@ -4,14 +4,19 @@
 !.env.example
 
 # Java / Maven
+target/
 backend/target/
-backend/.mvn/wrapper/maven-wrapper.jar
+backend-proyectos/target/
+backend-avances/target/
+*/target/
 *.class
 
 # Node / Vite
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+node_modules/
+dist/
 
 # Logs
 *.log
@@ -36,14 +41,8 @@ crash.*.log
 # Docker local
 mysql_data/
 
-# Terraform y credenciales sensibles
-**/.terraform/
-**/*.tfstate
-**/*.tfstate.*
-**/.terraform.lock.hcl
-*.pem
-*.key
-
-# Credenciales locales AWS
+# Credenciales y llaves
 .aws/
 **/.aws/
+*.pem
+*.key

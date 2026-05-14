@@ -12,7 +12,6 @@ concurrency:
 env:
   IMAGE_TAG: latest
   PROJECT_NAME: innovatech-ep2
-  MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
 
 jobs:
   build-push-deploy:
@@ -37,17 +36,25 @@ jobs:
       - name: Definir imagenes
         run: |
           echo "FRONTEND_IMAGE=${{ steps.login-ecr.outputs.registry }}/${PROJECT_NAME}-frontend:${IMAGE_TAG}" >> $GITHUB_ENV
-          echo "BACKEND_IMAGE=${{ steps.login-ecr.outputs.registry }}/${PROJECT_NAME}-backend:${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "PROYECTOS_BACKEND_IMAGE=${{ steps.login-ecr.outputs.registry }}/${PROJECT_NAME}-proyectos-backend:${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "AVANCES_BACKEND_IMAGE=${{ steps.login-ecr.outputs.registry }}/${PROJECT_NAME}-avances-backend:${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build y push Backend
+      - name: Build y push Proyectos Backend
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: ./backend-proyectos
           push: true
-          tags: ${{ env.BACKEND_IMAGE }}
+          tags: ${{ env.PROYECTOS_BACKEND_IMAGE }}
+
+      - name: Build y push Avances Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend-avances
+          push: true
+          tags: ${{ env.AVANCES_BACKEND_IMAGE }}
 
       - name: Build y push Frontend
         uses: docker/build-push-action@v6
@@ -62,7 +69,7 @@ jobs:
 
       - name: Deploy Data privado con Docker volume
         run: |
-          cat > /tmp/deploy-data.sh <<EOF
+          cat > /tmp/deploy-data.sh <<'SCRIPT'
           #!/bin/bash
           set -eux
           mkdir -p /opt/innovatech-data
@@ -95,7 +102,7 @@ jobs:
           docker compose up -d
           docker ps
           docker volume ls
-          EOF
+          SCRIPT
           COMMANDS=$(jq -Rs 'split("\n") | map(select(length > 0))' /tmp/deploy-data.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.DATA_INSTANCE_ID }}" \
@@ -106,9 +113,9 @@ jobs:
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "${{ secrets.DATA_INSTANCE_ID }}"
           aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "${{ secrets.DATA_INSTANCE_ID }}" --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' --output text
 
-      - name: Deploy Backend privado
+      - name: Deploy Backends privados
         run: |
-          cat > /tmp/deploy-backend.sh <<EOF
+          cat > /tmp/deploy-backends.sh <<'SCRIPT'
           #!/bin/bash
           set -eux
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
@@ -116,9 +123,9 @@ jobs:
           cd /opt/innovatech-backend
           cat > docker-compose.yml <<'COMPOSE'
           services:
-            backend:
-              image: __BACKEND_IMAGE__
-              container_name: innovatech-backend
+            proyectos-backend:
+              image: __PROYECTOS_BACKEND_IMAGE__
+              container_name: innovatech-proyectos-backend
               restart: unless-stopped
               environment:
                 SPRING_DATASOURCE_URL: jdbc:mysql://__DATA_PRIVATE_IP__:3306/__MYSQL_DATABASE__
@@ -126,8 +133,20 @@ jobs:
                 SPRING_DATASOURCE_PASSWORD: __MYSQL_ROOT_PASSWORD__
               ports:
                 - "8080:8080"
+
+            avances-backend:
+              image: __AVANCES_BACKEND_IMAGE__
+              container_name: innovatech-avances-backend
+              restart: unless-stopped
+              environment:
+                SPRING_DATASOURCE_URL: jdbc:mysql://__DATA_PRIVATE_IP__:3306/__MYSQL_DATABASE__
+                SPRING_DATASOURCE_USERNAME: root
+                SPRING_DATASOURCE_PASSWORD: __MYSQL_ROOT_PASSWORD__
+              ports:
+                - "8081:8081"
           COMPOSE
-          sed -i 's#__BACKEND_IMAGE__#${{ env.BACKEND_IMAGE }}#g' docker-compose.yml
+          sed -i 's#__PROYECTOS_BACKEND_IMAGE__#${{ env.PROYECTOS_BACKEND_IMAGE }}#g' docker-compose.yml
+          sed -i 's#__AVANCES_BACKEND_IMAGE__#${{ env.AVANCES_BACKEND_IMAGE }}#g' docker-compose.yml
           sed -i 's#__DATA_PRIVATE_IP__#${{ secrets.DATA_PRIVATE_IP }}#g' docker-compose.yml
           sed -i 's#__MYSQL_DATABASE__#${{ secrets.MYSQL_DATABASE }}#g' docker-compose.yml
           sed -i 's#__MYSQL_ROOT_PASSWORD__#${{ secrets.MYSQL_ROOT_PASSWORD }}#g' docker-compose.yml
@@ -135,12 +154,12 @@ jobs:
           docker compose up -d
           docker image prune -f
           docker ps
-          EOF
-          COMMANDS=$(jq -Rs 'split("\n") | map(select(length > 0))' /tmp/deploy-backend.sh)
+          SCRIPT
+          COMMANDS=$(jq -Rs 'split("\n") | map(select(length > 0))' /tmp/deploy-backends.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.BACKEND_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy Backend EP2" \
+            --comment "Deploy Backends EP2" \
             --parameters commands="$COMMANDS" \
             --query "Command.CommandId" --output text)
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "${{ secrets.BACKEND_INSTANCE_ID }}"
@@ -148,7 +167,7 @@ jobs:
 
       - name: Deploy Frontend publico
         run: |
-          cat > /tmp/deploy-frontend.sh <<EOF
+          cat > /tmp/deploy-frontend.sh <<'SCRIPT'
           #!/bin/bash
           set -eux
           aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
@@ -161,7 +180,8 @@ jobs:
               container_name: innovatech-frontend
               restart: unless-stopped
               environment:
-                BACKEND_URL: http://__BACKEND_PRIVATE_IP__:8080
+                BACKEND_PROYECTOS_URL: http://__BACKEND_PRIVATE_IP__:8080
+                BACKEND_AVANCES_URL: http://__BACKEND_PRIVATE_IP__:8081
               ports:
                 - "80:8080"
           COMPOSE
@@ -171,7 +191,7 @@ jobs:
           docker compose up -d
           docker image prune -f
           docker ps
-          EOF
+          SCRIPT
           COMMANDS=$(jq -Rs 'split("\n") | map(select(length > 0))' /tmp/deploy-frontend.sh)
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ secrets.FRONTEND_INSTANCE_ID }}" \

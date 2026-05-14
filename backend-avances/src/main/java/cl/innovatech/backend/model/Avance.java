@@ -2,16 +2,13 @@ package cl.innovatech.backend.model;
 
 import java.time.LocalDate;
 
-import com.fasterxml.jackson.annotation.JsonBackReference;
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -32,8 +29,6 @@ public class Avance {
 
     private boolean completado;
 
-    @ManyToOne
-    @JoinColumn(name = "proyecto_id")
-    @JsonBackReference
-    private Proyecto proyecto;
+    @NotNull(message = "El id del proyecto es obligatorio")
+    private Long proyectoId;
 }

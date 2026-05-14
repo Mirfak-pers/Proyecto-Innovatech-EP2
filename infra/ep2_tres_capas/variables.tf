@@ -10,10 +10,10 @@ variable "project_name" {
   default     = "innovatech-ep2"
 }
 
-variable "key_name" {
+variable "key_pair_name" {
   description = "Nombre del Key Pair creado en AWS. Debe existir antes del terraform apply."
   type        = string
-  default     = "innovatech-key"
+  default     = "ep2-devops-key"
 }
 
 variable "iam_instance_profile_name" {

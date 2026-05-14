@@ -3,20 +3,18 @@ package cl.innovatech.backend.controller;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1")
 public class HealthController {
 
-    @GetMapping("/ping")
+    @GetMapping({"/ping", "/ping/proyectos"})
     public ResponseEntity<Map<String, String>> ping() {
         return ResponseEntity.ok(Map.of(
                 "status", "ok",
-                "service", "innovatech-backend",
-                "context", "gestion-proyectos"
+                "service", "innovatech-proyectos-backend",
+                "context", "microservicio-proyectos"
         ));
     }
 }

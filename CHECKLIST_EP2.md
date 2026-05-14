@@ -1,9 +1,10 @@
 # Checklist EP2
 
 - [x] Dockerfile Frontend multi-stage.
-- [x] Dockerfile Backend multi-stage.
-- [x] Proyecto no root en imágenes finales.
-- [x] Docker Compose local.
+- [x] Dockerfile Proyectos Backend multi-stage.
+- [x] Dockerfile Avances Backend multi-stage.
+- [x] Ejecución con usuario no root en imágenes propias.
+- [x] Docker Compose local con cuatro contenedores.
 - [x] Volumen Docker para persistencia de MySQL.
 - [x] Terraform con VPC.
 - [x] Subnet pública para Frontend.
@@ -11,9 +12,9 @@
 - [x] Internet Gateway.
 - [x] NAT Gateway.
 - [x] Security Group Frontend público.
-- [x] Security Group Backend privado, puerto 8080 solo desde Frontend.
+- [x] Security Group Backend privado, puertos 8080 y 8081 solo desde Frontend.
 - [x] Security Group Data privado, puerto 3306 solo desde Backend.
-- [x] Repositorios ECR para imágenes.
+- [x] Repositorios ECR para Frontend, Proyectos Backend y Avances Backend.
 - [x] CloudWatch Log Groups.
 - [x] GitHub Actions con rama deploy.
 - [x] Pipeline build -> push -> deploy.

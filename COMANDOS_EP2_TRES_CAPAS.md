@@ -8,6 +8,14 @@ docker compose up --build -d
 docker compose ps
 ```
 
+Validar:
+
+```text
+http://localhost:3000
+http://localhost:3000/api/v1/ping
+http://localhost:3000/api/v1/ping/avances
+```
+
 ## Terraform
 
 ```powershell
@@ -20,17 +28,20 @@ terraform apply
 terraform output
 ```
 
-## GitHub
+## GitHub ramas
 
 ```powershell
-git init
-git add .
-git commit -m "Proyecto EP2 DevOps tres capas"
-git branch -M main
-git remote add origin https://github.com/TU-USUARIO/TU-REPO.git
-git push -u origin main
-git checkout -b deploy
-git push -u origin deploy
+git checkout Develop
+git merge feature/fix_backend
+git push origin Develop
+
+git checkout main
+git merge Develop
+git push origin main
+
+git checkout deploy
+git merge main
+git push origin deploy
 ```
 
 ## Verificar EC2 con SSM
@@ -48,7 +59,8 @@ docker ps
 docker compose ps
 docker volume ls
 docker logs innovatech-frontend
-docker logs innovatech-backend
+docker logs innovatech-proyectos-backend
+docker logs innovatech-avances-backend
 docker logs innovatech-mysql
 ```
 
