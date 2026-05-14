@@ -8,7 +8,7 @@ on:
 concurrency:
   group: ep2-deploy-3layers
   cancel-in-progress: true
-
+ 
 env:
   IMAGE_TAG: latest
   PROJECT_NAME: innovatech-ep2
