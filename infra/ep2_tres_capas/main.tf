@@ -431,6 +431,14 @@ resource "aws_instance" "data" {
   iam_instance_profile   = data.aws_iam_instance_profile.lab_profile.name
   user_data              = local.common_user_data
 
+  # Se aumenta solo el disco de la capa Data porque MySQL necesita
+  # espacio adicional para descargar y extraer la imagen Docker.
+  # Se mantiene un tamaño moderado para cuidar el presupuesto AWS Academy.
+  root_block_device {
+    volume_size = 12
+    volume_type = "gp3"
+  }
+
   tags = {
     Name    = "${var.project_name}-data"
     Tier    = "Data"
