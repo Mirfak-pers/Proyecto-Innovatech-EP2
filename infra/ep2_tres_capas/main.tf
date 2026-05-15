@@ -73,8 +73,8 @@ resource "aws_ecr_repository" "frontend" {
   }
 }
 
-resource "aws_ecr_repository" "backend" {
-  name                 = "${var.project_name}-backend"
+resource "aws_ecr_repository" "proyectos_backend" {
+  name                 = "${var.project_name}-proyectos-backend"
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 
@@ -83,9 +83,27 @@ resource "aws_ecr_repository" "backend" {
   }
 
   tags = {
-    Name    = "${var.project_name}-backend"
+    Name    = "${var.project_name}-proyectos-backend"
     Project = var.project_name
     Stage   = "EP2"
+    Service = "Proyectos"
+  }
+}
+
+resource "aws_ecr_repository" "avances_backend" {
+  name                 = "${var.project_name}-avances-backend"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Name    = "${var.project_name}-avances-backend"
+    Project = var.project_name
+    Stage   = "EP2"
+    Service = "Avances"
   }
 }
 
@@ -250,9 +268,17 @@ resource "aws_security_group" "backend" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "API 8080 solo desde Frontend"
+    description     = "API 8080 Proyectos solo desde Frontend"
     from_port       = 8080
     to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.frontend.id]
+  }
+
+  ingress {
+    description     = "API 8081 Avances solo desde Frontend"
+    from_port       = 8081
+    to_port         = 8081
     protocol        = "tcp"
     security_groups = [aws_security_group.frontend.id]
   }
@@ -364,7 +390,7 @@ locals {
 resource "aws_instance" "frontend" {
   ami                         = data.aws_ami.amazon_linux.id
   instance_type               = var.instance_type
-  key_name                    = var.key_name
+  key_name                    = var.key_pair_name
   subnet_id                   = aws_subnet.public_frontend.id
   vpc_security_group_ids      = [aws_security_group.frontend.id]
   iam_instance_profile        = data.aws_iam_instance_profile.lab_profile.name
@@ -382,7 +408,7 @@ resource "aws_instance" "frontend" {
 resource "aws_instance" "backend" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  key_name               = var.key_name
+  key_name               = var.key_pair_name
   subnet_id              = aws_subnet.private_backend_data.id
   vpc_security_group_ids = [aws_security_group.backend.id]
   iam_instance_profile   = data.aws_iam_instance_profile.lab_profile.name
@@ -399,7 +425,7 @@ resource "aws_instance" "backend" {
 resource "aws_instance" "data" {
   ami                    = data.aws_ami.amazon_linux.id
   instance_type          = var.instance_type
-  key_name               = var.key_name
+  key_name               = var.key_pair_name
   subnet_id              = aws_subnet.private_backend_data.id
   vpc_security_group_ids = [aws_security_group.data.id]
   iam_instance_profile   = data.aws_iam_instance_profile.lab_profile.name
