@@ -48,7 +48,7 @@ data "aws_availability_zones" "available" {
 }
 
 # AWS Academy normalmente entrega este instance profile.
-# Si tu laboratorio usa otro nombre, cambialo en variables.tfvars.
+# Si tu laboratorio usa otro nombre, cambialo en terraform.tfvars.
 data "aws_iam_instance_profile" "lab_profile" {
   name = var.iam_instance_profile_name
 }
@@ -358,22 +358,30 @@ resource "aws_cloudwatch_log_group" "data" {
 }
 
 # ------------------------------------------------------------
-# User data comun: Docker + Compose + SSM
+# User data comun: Docker + Compose + SSM + expansion de disco
 # ------------------------------------------------------------
 
 locals {
   common_user_data = <<-EOF
     #!/bin/bash
     set -eux
+
     dnf update -y
-    dnf install -y docker git amazon-ssm-agent awscli
+    dnf install -y docker git amazon-ssm-agent awscli cloud-utils-growpart xfsprogs
+
+    # Expande la particion raiz si el volumen EBS fue aumentado.
+    growpart /dev/xvda 1 || true
+    xfs_growfs -d / || true
+
     systemctl enable docker
     systemctl start docker
     systemctl enable amazon-ssm-agent
     systemctl start amazon-ssm-agent
+
     usermod -aG docker ec2-user
     mkdir -p /opt/innovatech
     chown -R ec2-user:ec2-user /opt/innovatech
+
     # Instala Docker Compose plugin si no viene incluido en la AMI.
     if ! docker compose version >/dev/null 2>&1; then
       mkdir -p /usr/local/lib/docker/cli-plugins
@@ -397,6 +405,13 @@ resource "aws_instance" "frontend" {
   associate_public_ip_address = true
   user_data                   = local.common_user_data
 
+  # Se asigna espacio suficiente para Docker, Nginx y la imagen del Frontend.
+  # Mantiene un tamaño moderado para cuidar el presupuesto AWS Academy.
+  root_block_device {
+    volume_size = 12
+    volume_type = "gp3"
+  }
+
   tags = {
     Name    = "${var.project_name}-frontend"
     Tier    = "Frontend"
@@ -413,6 +428,14 @@ resource "aws_instance" "backend" {
   vpc_security_group_ids = [aws_security_group.backend.id]
   iam_instance_profile   = data.aws_iam_instance_profile.lab_profile.name
   user_data              = local.common_user_data
+
+  # Se asigna espacio suficiente para descargar y ejecutar
+  # dos imagenes Java: proyectos-backend y avances-backend.
+  # Mantiene un tamaño moderado para cuidar el presupuesto AWS Academy.
+  root_block_device {
+    volume_size = 12
+    volume_type = "gp3"
+  }
 
   tags = {
     Name    = "${var.project_name}-backend"
@@ -431,9 +454,9 @@ resource "aws_instance" "data" {
   iam_instance_profile   = data.aws_iam_instance_profile.lab_profile.name
   user_data              = local.common_user_data
 
-  # Se aumenta solo el disco de la capa Data porque MySQL necesita
-  # espacio adicional para descargar y extraer la imagen Docker.
-  # Se mantiene un tamaño moderado para cuidar el presupuesto AWS Academy.
+  # Se asigna espacio suficiente para MySQL, volumenes Docker
+  # y extraccion de la imagen mysql:8.0.
+  # Mantiene un tamaño moderado para cuidar el presupuesto AWS Academy.
   root_block_device {
     volume_size = 12
     volume_type = "gp3"

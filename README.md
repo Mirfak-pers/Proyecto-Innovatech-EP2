@@ -1,148 +1,80 @@
-# Innovatech Chile - EP2 DevOps Tres Capas
+Innovatech Chile — EP2 DevOps
+Infraestructura de 3 capas desplegada en AWS con Terraform, contenedorizada con Docker y automatizada mediante GitHub Actions.
 
-Proyecto preparado para la **Evaluación Parcial N°2**. Mantiene la arquitectura de tres capas de la EP1 y agrega contenedorización, ECR y pipeline CI/CD con GitHub Actions.
+📋 Descripción
+El proyecto dockeriza y despliega tres servicios en AWS:
 
-## Arquitectura
+Frontend: React + Vite servido por Nginx como reverse proxy, expuesto públicamente en el puerto 80.
+Backend Proyectos: microservicio Spring Boot en el puerto 8080, subred privada.
+Backend Avances: microservicio Spring Boot en el puerto 8081, subred privada.
+Base de datos: MySQL 8.0 en EC2 dedicada con persistencia mediante named volume.
 
-```text
-Internet
-   |
-   v
-EC2 Frontend pública - Docker Frontend/Nginx - puerto 80
-   |
-   v
-EC2 Backend privada
-   |-- Docker Proyectos Backend Spring Boot - puerto 8080 solo desde Frontend
-   |-- Docker Avances Backend Spring Boot   - puerto 8081 solo desde Frontend
-   |
-   v
-EC2 Data privada - Docker MySQL - puerto 3306 solo desde Backend
-```
+Un push a la rama deploy construye las imágenes, las publica en Amazon ECR y las despliega automáticamente en las EC2 vía AWS SSM.
 
-## Contenedores locales
+🗂️ Estructura del proyecto
+Proyecto-Innovatech-EP2/
+├── frontend/
+│   ├── Dockerfile                  # Multi-stage: Node build + nginx-unprivileged runtime
+│   ├── nginx/default.conf.template # Reverse proxy hacia los backends
+│   └── src/
+├── backend-proyectos/
+│   ├── Dockerfile                  # Multi-stage: Maven build + JRE runtime, usuario no-root
+│   └── src/
+├── backend-avances/
+│   ├── Dockerfile                  # Multi-stage: Maven build + JRE runtime, usuario no-root
+│   └── src/
+├── deploy/                         # Composes de producción (uno por capa EC2)
+│   ├── frontend-compose.yml
+│   ├── backend-compose.yml
+│   └── data-compose.yml
+├── infra/ep2_tres_capas/
+│   ├── main.tf                     # VPC, subredes, SGs, EC2s, ECR, CloudWatch
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── terraform.tfvars.example
+├── .github/workflows/deploy.yml    # Pipeline CI/CD completo
+├── docker-compose.yml              # Stack local para desarrollo
+├── .env.example
+└── README.md
 
-```text
-innovatech-frontend
-innovatech-proyectos-backend
-innovatech-avances-backend
-innovatech-mysql
-```
+🚀 Requisitos previos
 
-## Imágenes propias publicadas en ECR
+Terraform CLI >= 1.5.0
+AWS CLI configurado con credenciales activas
+Docker Desktop instalado y en ejecución
+Key Pair creado en AWS con el nombre ep2-devops-key
+Provider AWS >= 5.0
 
-```text
-innovatech-ep2-frontend
-innovatech-ep2-proyectos-backend
-innovatech-ep2-avances-backend
-```
 
-MySQL usa la imagen oficial `mysql:8.0`, por eso no se publica en ECR.
-
-## Qué incluye
-
-- Flujo de ramas recomendado: `Develop`/`develop` -> `main` -> `deploy`.
-- Dockerfile multi-stage para Frontend, Proyectos Backend y Avances Backend.
-- Docker Compose local con cuatro servicios.
-- Persistencia de datos mediante volumen Docker `innovatech_mysql_data`.
-- Terraform con VPC, subnet pública, subnet privada, IGW, NAT Gateway, Security Groups, EC2, ECR y CloudWatch.
-- Pipeline GitHub Actions: `build -> push ECR -> deploy EC2`.
-- Despliegue por AWS Systems Manager hacia EC2 privadas sin abrir SSH público al backend ni a data.
-
-## 1. Prueba local
-
-```powershell
-copy .env.example .env
-docker compose up --build -d
-docker compose ps
-```
-
-Abrir:
-
-```text
-http://localhost:3000
-http://localhost:3000/api/v1/ping
-http://localhost:3000/api/v1/ping/avances
-```
-
-## 2. Crear infraestructura AWS
-
-```powershell
-cd infra\ep2_tres_capas
-copy terraform.tfvars.example terraform.tfvars
+⚙️ Flujo de uso
+1. Levantar infraestructura AWS
+bashcd infra/ep2_tres_capas
+cp terraform.tfvars.example terraform.tfvars
 terraform init
 terraform validate
 terraform plan
 terraform apply
 terraform output
-```
+2. Configurar GitHub Secrets
+Con los valores del terraform output, crear los siguientes secrets en GitHub → Settings → Secrets and variables → Actions:
+SecretDescripciónAWS_ACCESS_KEY_IDCredencial AWS AcademyAWS_SECRET_ACCESS_KEYCredencial AWS AcademyAWS_SESSION_TOKENToken de sesión AWS AcademyAWS_REGIONus-east-1FRONTEND_INSTANCE_IDID de la instancia frontendBACKEND_INSTANCE_IDID de la instancia backendDATA_INSTANCE_IDID de la instancia dataBACKEND_PRIVATE_IPIP privada del backend (ej. 10.0.2.X)DATA_PRIVATE_IPIP privada de la instancia dataMYSQL_DATABASEinnovatech_dbMYSQL_ROOT_PASSWORDContraseña segura para MySQL
 
-El output entrega los datos que debes copiar en GitHub Secrets.
+⚠️ BACKEND_PRIVATE_IP debe ser la IP privada (ej. 10.0.2.15), no el ID de instancia.
 
-## 3. Secrets necesarios en GitHub Actions
-
-En GitHub: `Settings -> Secrets and variables -> Actions -> New repository secret`.
-
-```text
-AWS_ACCESS_KEY_ID
-AWS_SECRET_ACCESS_KEY
-AWS_SESSION_TOKEN
-AWS_REGION
-FRONTEND_INSTANCE_ID
-BACKEND_INSTANCE_ID
-DATA_INSTANCE_ID
-BACKEND_PRIVATE_IP
-DATA_PRIVATE_IP
-MYSQL_DATABASE
-MYSQL_ROOT_PASSWORD
-```
-
-Valores recomendados:
-
-```text
-AWS_REGION=us-east-1
-MYSQL_DATABASE=innovatech_db
-MYSQL_ROOT_PASSWORD=elige_una_clave_segura
-```
-
-## 4. Ejecutar pipeline
-
-El workflow se ejecuta con push a la rama `deploy`.
-
-```powershell
-git checkout deploy
+3. Probar localmente
+bashcp .env.example .env
+docker compose up --build
+Acceder a http://localhost:3000. Para detener: docker compose down
+4. Desplegar a producción
+bashgit checkout deploy
 git merge main
 git push origin deploy
-```
+El pipeline se activa automáticamente y despliega las 3 imágenes en AWS.
 
-## 5. Validación para la defensa
+📌 Principios DevOps aplicados
 
-Desde el navegador:
-
-```text
-http://IP_PUBLICA_FRONTEND
-http://IP_PUBLICA_FRONTEND/api/v1/ping
-http://IP_PUBLICA_FRONTEND/api/v1/ping/avances
-```
-
-Desde AWS Systems Manager puedes entrar a cada instancia:
-
-```powershell
-aws ssm start-session --target ID_FRONTEND
-aws ssm start-session --target ID_BACKEND
-aws ssm start-session --target ID_DATA
-```
-
-Comandos útiles dentro de las EC2:
-
-```bash
-docker ps
-docker logs innovatech-frontend
-docker logs innovatech-proyectos-backend
-docker logs innovatech-avances-backend
-docker logs innovatech-mysql
-docker volume ls
-```
-
-## Justificación técnica rápida
-
-La solución aplica DevOps porque separa el código de la infraestructura, usa Docker para empaquetar los servicios, Terraform para crear recursos de AWS de manera repetible, GitHub Actions para automatizar la entrega y ECR como registro de imágenes. La seguridad se controla mediante subredes y Security Groups: el Frontend es la única capa pública, los microservicios backend solo reciben tráfico desde Frontend y la base de datos solo recibe tráfico desde Backend.
+Infraestructura como código: toda la infraestructura AWS se define en Terraform y es reproducible con un solo comando.
+Contenedorización: cada servicio corre en su propio contenedor con dependencias aisladas, con multi-stage build y usuario no-root.
+CI/CD automatizado: push a deploy desencadena el ciclo completo build → push ECR → deploy SSM sin intervención manual.
+Persistencia declarativa: named volume para MySQL, independiente del ciclo de vida del contenedor.
+Mínimo privilegio: contenedores sin root, Security Groups encadenados por capa, secrets en variables de entorno.
