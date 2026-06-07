@@ -1,8 +1,7 @@
 # ============================================================
 # Frontend - React/Vite servido por nginx
 # Deployment + Service LoadBalancer (URL pública)
-# nginx.conf ya tiene los proxy_pass a backend-proyectos:8080
-# y backend-avances:8081 via DNS interno de Kubernetes
+# imagePullSecrets: usa ecr-secret creado por el pipeline
 # ============================================================
 
 apiVersion: apps/v1
@@ -23,16 +22,15 @@ spec:
         app: frontend
         tier: frontend
     spec:
+      imagePullSecrets:
+        - name: ecr-secret
       containers:
         - name: frontend
-          # Placeholder: el pipeline sobreescribe con kubectl set image
           image: frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
-            # En K8s el DNS interno resuelve el nombre del Service directamente.
-            # nginx usa estas variables via envsubst en el template.
             - name: BACKEND_PROYECTOS_URL
               value: "http://backend-proyectos:8080"
             - name: BACKEND_AVANCES_URL
@@ -65,6 +63,4 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
-  # LoadBalancer: EKS crea un Classic Load Balancer en AWS
-  # que expone el frontend públicamente
   type: LoadBalancer

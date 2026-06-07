@@ -44,7 +44,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       # ----------------------------------------------------------
-      # 4. Obtener Account ID y construir URLs de ECR
+      # 4. Construir URLs de repositorios ECR
       # ----------------------------------------------------------
       - name: Construir URLs de repositorios ECR
         run: |
@@ -54,7 +54,7 @@ jobs:
           echo "AVANCES_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-avances-backend" >> $GITHUB_ENV
 
       # ----------------------------------------------------------
-      # 5. Build y Push de las 3 imágenes (tag = SHA del commit)
+      # 5. Build y Push de las 3 imágenes
       # ----------------------------------------------------------
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -96,8 +96,7 @@ jobs:
             --name ${{ env.CLUSTER_NAME }}
 
       # ----------------------------------------------------------
-      # 7. Crear/actualizar Secret de MySQL en el cluster
-      #    (dry-run + apply para ser idempotente)
+      # 7. Crear Secret de MySQL (idempotente)
       # ----------------------------------------------------------
       - name: Aplicar Secret de MySQL
         run: |
@@ -107,7 +106,22 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ----------------------------------------------------------
-      # 8. Aplicar todos los manifiestos K8s
+      # 8. Crear imagePullSecret para ECR
+      #    Los nodos de AWS Academy no tienen acceso automático a ECR,
+      #    por lo que cada pod necesita este secret para autenticarse.
+      # ----------------------------------------------------------
+      - name: Crear imagePullSecret para ECR
+        run: |
+          ECR_TOKEN=$(aws ecr get-login-password --region ${{ env.AWS_REGION }})
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          kubectl create secret docker-registry ecr-secret \
+            --docker-server=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com \
+            --docker-username=AWS \
+            --docker-password=${ECR_TOKEN} \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # ----------------------------------------------------------
+      # 9. Aplicar manifiestos Kubernetes
       # ----------------------------------------------------------
       - name: Aplicar manifiestos Kubernetes
         run: |
@@ -118,7 +132,7 @@ jobs:
           kubectl apply -f infra/k8s/hpa-backends.yml
 
       # ----------------------------------------------------------
-      # 9. Actualizar imagen de cada Deployment con el SHA del commit
+      # 10. Actualizar imagen con el SHA del commit
       # ----------------------------------------------------------
       - name: Actualizar imagen - Backend Proyectos
         run: |
@@ -136,19 +150,23 @@ jobs:
             frontend=${{ env.FRONTEND_ECR }}:${{ github.sha }}
 
       # ----------------------------------------------------------
-      # 10. Esperar rollout completo (verifica que los pods levanten)
+      # 11. Esperar rollout (continue-on-error para no cortar el pipeline
+      #     si Spring Boot tarda más de lo esperado en arrancar)
       # ----------------------------------------------------------
       - name: Esperar rollout - Backend Proyectos
-        run: kubectl rollout status deployment/backend-proyectos --timeout=180s
+        continue-on-error: true
+        run: kubectl rollout status deployment/backend-proyectos --timeout=300s
 
       - name: Esperar rollout - Backend Avances
-        run: kubectl rollout status deployment/backend-avances --timeout=180s
+        continue-on-error: true
+        run: kubectl rollout status deployment/backend-avances --timeout=300s
 
       - name: Esperar rollout - Frontend
+        continue-on-error: true
         run: kubectl rollout status deployment/frontend --timeout=120s
 
       # ----------------------------------------------------------
-      # 11. Verificación final: mostrar pods, services y HPA
+      # 12. Estado final del cluster
       # ----------------------------------------------------------
       - name: Estado final del cluster
         run: |

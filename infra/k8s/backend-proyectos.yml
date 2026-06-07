@@ -1,7 +1,7 @@
 # ============================================================
 # Backend Proyectos - Spring Boot puerto 8080
 # Deployment + Service ClusterIP
-# La imagen real se inyecta en el pipeline con kubectl set image
+# imagePullSecrets: usa ecr-secret creado por el pipeline
 # ============================================================
 
 apiVersion: apps/v1
@@ -22,9 +22,10 @@ spec:
         app: backend-proyectos
         tier: backend
     spec:
+      imagePullSecrets:
+        - name: ecr-secret
       containers:
         - name: backend-proyectos
-          # Placeholder: el pipeline sobreescribe con kubectl set image
           image: backend-proyectos:latest
           imagePullPolicy: Always
           ports:
@@ -39,22 +40,20 @@ spec:
                 secretKeyRef:
                   name: mysql-secret
                   key: MYSQL_ROOT_PASSWORD
-          # Liveness: reinicia el pod si la app queda colgada
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: 8080
-            initialDelaySeconds: 60
+            initialDelaySeconds: 90
             periodSeconds: 15
-            failureThreshold: 4
-          # Readiness: solo recibe tráfico cuando Spring está listo
+            failureThreshold: 5
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: 8080
-            initialDelaySeconds: 45
+            initialDelaySeconds: 60
             periodSeconds: 10
-            failureThreshold: 6
+            failureThreshold: 8
           resources:
             requests:
               cpu: "250m"
@@ -77,5 +76,4 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
-  # ClusterIP: solo el frontend (nginx proxy) llega aquí
   type: ClusterIP

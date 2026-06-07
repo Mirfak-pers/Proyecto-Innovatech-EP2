@@ -1,21 +1,9 @@
 # ============================================================
 # MySQL - Base de datos compartida para Proyectos y Avances
-# Usa PersistentVolumeClaim para sobrevivir reinicios del pod.
+# Sin PersistentVolumeClaim (AWS Academy no lo soporta).
 # Solo accesible dentro del cluster (ClusterIP).
 # ============================================================
 
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mysql-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 5Gi
-
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,10 +38,6 @@ spec:
                 secretKeyRef:
                   name: mysql-secret
                   key: MYSQL_DATABASE
-          volumeMounts:
-            - name: mysql-storage
-              mountPath: /var/lib/mysql
-          # Readiness probe: solo acepta tráfico cuando MySQL responde
           readinessProbe:
             exec:
               command:
@@ -70,10 +54,6 @@ spec:
             limits:
               cpu: "500m"
               memory: "1Gi"
-      volumes:
-        - name: mysql-storage
-          persistentVolumeClaim:
-            claimName: mysql-pvc
 
 ---
 apiVersion: v1
@@ -89,5 +69,4 @@ spec:
   ports:
     - port: 3306
       targetPort: 3306
-  # ClusterIP: solo accesible desde dentro del cluster
   type: ClusterIP
