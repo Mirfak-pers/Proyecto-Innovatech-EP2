@@ -1,196 +1,179 @@
-# Proyecto Innovatech EP2 – Infraestructura AWS con Terraform
+# Innovatech Chile – EP3: Orquestación con AWS EKS
 
 ## Descripción
 
-Infraestructura gestionada con **Terraform** para desplegar una arquitectura de **3 capas en AWS**:
+Continuación del EP2. La infraestructura de 3 capas en EC2 fue migrada a **AWS EKS (Elastic Kubernetes Service)**, logrando orquestación automática, autoscaling y despliegue continuo desde GitHub.
 
-* **Frontend público** en EC2.
-* **Backend privado** en EC2.
-* **Base de datos MySQL** en EC2 privada.
-* **VPC** con subred pública y subred privada.
-* **Internet Gateway** para acceso al frontend.
-* **NAT Gateway** para salida a Internet desde la subred privada.
-* **Security Groups** separados por capa.
-* **Amazon ECR** para imágenes Docker.
-* **GitHub Actions** para CI/CD.
-* **AWS Systems Manager (SSM)** para despliegue remoto.
-* **CloudWatch Logs** para organización de logs por capa.
+### Stack tecnológico
+
+| Capa | Tecnología |
+|------|-----------|
+| Orquestación | AWS EKS (Kubernetes 1.29) |
+| Imágenes | Amazon ECR |
+| Infraestructura | Terraform |
+| CI/CD | GitHub Actions |
+| Frontend | React + Vite + nginx |
+| Backend Proyectos | Spring Boot 3 (puerto 8080) |
+| Backend Avances | Spring Boot 3 (puerto 8081) |
+| Base de datos | MySQL 8.0 en pod K8s |
+| Logs | kubectl logs + CloudWatch |
+
+---
+
+## Arquitectura
+
+```
+Internet
+    │
+    ▼
+AWS Load Balancer (creado automáticamente por EKS)
+    │  puerto 80
+    ▼
+┌─────────────────────────────────────────────┐
+│           EKS Cluster (VPC 10.0.0.0/16)     │
+│                                             │
+│  Pod: frontend (nginx)                      │
+│    │  proxy /api/v1/proyectos → :8080       │
+│    │  proxy /api/v1/avances   → :8081       │
+│    ▼                                        │
+│  Pod: backend-proyectos x2 (:8080)          │
+│  Pod: backend-avances   x2 (:8081)          │
+│    │                                        │
+│    ▼                                        │
+│  Pod: mysql (:3306)  [PVC 5Gi]              │
+└─────────────────────────────────────────────┘
+```
+
+### Flujo CI/CD
+
+```
+Push a rama deploy
+       │
+       ▼
+GitHub Actions
+       │
+       ├─ Build imágenes Docker (linux/amd64)
+       ├─ Push a Amazon ECR (tag = SHA del commit)
+       ├─ kubectl apply -f infra/k8s/
+       ├─ kubectl set image (actualiza cada Deployment)
+       └─ kubectl rollout status (espera que todos los pods levanten)
+```
 
 ---
 
 ## Estructura del proyecto
 
-```text
-Proyecto-Innovatech-EP2/
+```
+Proyecto-Innovatech-EP3/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml
-├── backend-avances/
+│       └── deploy.yml          ← Pipeline CI/CD
+├── backend-proyectos/
 │   ├── Dockerfile
 │   └── src/
-├── backend-proyectos/
+├── backend-avances/
 │   ├── Dockerfile
 │   └── src/
 ├── frontend/
 │   ├── Dockerfile
+│   ├── nginx/default.conf.template
 │   └── src/
-├── deploy/
-│   ├── frontend-compose.yml
-│   ├── backend-compose.yml
-│   └── data-compose.yml
 ├── infra/
-│   └── ep2_tres_capas/
-│       ├── main.tf
-│       ├── variables.tf
-│       ├── outputs.tf
-│       └── terraform.tfvars.example
-├── docker-compose.yml
-├── .env.example
+│   ├── ep3_eks/
+│   │   ├── main.tf             ← EKS, ECR, VPC, CloudWatch
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── k8s/
+│       ├── mysql.yml           ← MySQL + PVC + ClusterIP Service
+│       ├── mysql-secret.yml    ← Referencia (valores reales en GitHub Secrets)
+│       ├── backend-proyectos.yml
+│       ├── backend-avances.yml
+│       ├── frontend.yml        ← LoadBalancer Service (URL pública)
+│       └── hpa-backends.yml    ← HPA: escala entre 2-5 réplicas al 50% CPU
+├── docker-compose.yml          ← Desarrollo local
 └── README.md
 ```
 
 ---
 
-## Requisitos
+## Requisitos previos
 
-* Cuenta AWS o AWS Academy activa.
-* Terraform CLI `>= 1.5.0`.
-* AWS CLI configurado.
-* Docker Desktop.
-* Git.
-* Key Pair creado en AWS.
-* Permisos para crear VPC, EC2, ECR, Security Groups, NAT Gateway, CloudWatch y SSM.
-
----
-
-## ¿Qué despliega este proyecto?
-
-### Red AWS
-
-```text
-Región: us-east-1
-VPC: 10.0.0.0/16
-Subred pública Frontend: 10.0.1.0/24
-Subred privada Backend + Data: 10.0.2.0/24
-```
-
-La subred pública usa una ruta hacia el **Internet Gateway**.
-
-```text
-0.0.0.0/0 → Internet Gateway
-```
-
-La subred privada usa una ruta hacia el **NAT Gateway**.
-
-```text
-0.0.0.0/0 → NAT Gateway
-```
+- Cuenta AWS Academy activa (laboratorio con LabRole disponible)
+- Terraform CLI >= 1.5.0
+- AWS CLI configurado (`aws configure`)
+- kubectl instalado
+- Docker Desktop
+- Git
 
 ---
 
-### Capa Frontend
+## Uso con Terraform (levantar infraestructura)
 
-```text
-EC2 Frontend
-Subred pública
-Contenedor: innovatech-frontend
-Puerto público: 80
-Puerto contenedor: 8080
+```bash
+cd infra/ep3_eks
+
+terraform init
+terraform validate
+terraform plan
+terraform apply
 ```
 
-Security Group:
+Al terminar, ejecutar el comando de kubeconfig que aparece en los outputs:
 
-```text
-80  desde Internet
-443 desde Internet
-22  desde admin_cidr
+```bash
+aws eks update-kubeconfig --region us-east-1 --name innovatech-cluster
 ```
+
+Verificar conexión:
+
+```bash
+kubectl get nodes
+```
+
+> **Nota:** El cluster EKS tarda aproximadamente 10-15 minutos en estar listo.
 
 ---
 
-### Capa Backend
+## GitHub Secrets requeridos
 
-```text
-EC2 Backend
-Subred privada
-Contenedores:
-- innovatech-proyectos-backend : 8080
-- innovatech-avances-backend   : 8081
-```
+Ir a **Settings → Secrets and variables → Actions** en el repositorio y crear:
 
-Security Group:
-
-```text
-8080 solo desde Frontend
-8081 solo desde Frontend
-22   solo desde Frontend
-```
+| Secret | Descripción |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | Credencial AWS Academy |
+| `AWS_SECRET_ACCESS_KEY` | Credencial AWS Academy |
+| `AWS_SESSION_TOKEN` | Token de sesión AWS Academy |
+| `MYSQL_ROOT_PASSWORD` | Contraseña segura para MySQL |
+| `MYSQL_DATABASE` | Nombre de la BD (ej: `innovatech_db`) |
 
 ---
 
-### Capa Data
+## Despliegue
 
-```text
-EC2 Data
-Subred privada
-Base de datos: MySQL 8.0
-Puerto: 3306
-Volumen: innovatech_mysql_data
-Disco: gp3 de 12 GB
+El pipeline se activa automáticamente al hacer push a la rama `deploy`:
+
+```bash
+git add .
+git commit -m "feat: migración a EKS EP3"
+git push origin deploy
 ```
 
-Security Group:
+Para ver el progreso en tiempo real:
 
-```text
-3306 solo desde Backend
-22   solo desde Backend
+```bash
+# Pods levantando
+kubectl get pods -w
+
+# Logs de un pod específico
+kubectl logs -f deployment/backend-proyectos
+
+# URL pública del frontend
+kubectl get service frontend
 ```
 
 ---
 
-## Amazon ECR
-
-Se crean tres repositorios para almacenar las imágenes Docker:
-
-```text
-innovatech-ep2-frontend
-innovatech-ep2-proyectos-backend
-innovatech-ep2-avances-backend
-```
-
----
-
-## GitHub Actions
-
-El pipeline está ubicado en:
-
-```text
-.github/workflows/deploy.yml
-```
-
-Flujo de despliegue:
-
-```text
-Push a rama deploy
-        ↓
-GitHub Actions
-        ↓
-Build de imágenes Docker
-        ↓
-Push a Amazon ECR
-        ↓
-Deploy vía AWS Systems Manager
-        ↓
-EC2 Frontend, Backend y Data
-```
-
-El despliegue se realiza mediante **SSM**, evitando conectarse manualmente por SSH a cada instancia.
-
----
-
-## Uso local con Docker
-
-Levantar el proyecto completo:
+## Desarrollo local
 
 ```bash
 docker compose up --build
@@ -198,126 +181,121 @@ docker compose up --build
 
 Servicios locales:
 
-```text
-Frontend: http://localhost:3000
-Backend Proyectos: http://localhost:8080
-Backend Avances: http://localhost:8081
-MySQL: localhost:3306
-```
+| Servicio | URL |
+|----------|-----|
+| Frontend | http://localhost:3000 |
+| Backend Proyectos | http://localhost:8080 |
+| Backend Avances | http://localhost:8081 |
+| MySQL | localhost:3306 |
 
-Detener los servicios:
+---
+
+## Autoscaling (HPA)
+
+El HPA escala los backends automáticamente entre **2 y 5 réplicas** cuando la CPU supera el **50%**.
 
 ```bash
-docker compose down
+# Ver estado del autoscaler
+kubectl get hpa
+
+# Descripción detallada
+kubectl describe hpa hpa-backend-proyectos
+kubectl describe hpa hpa-backend-avances
+```
+
+Para simular carga y observar el HPA en acción:
+
+```bash
+# Abrir terminal con un pod de carga
+kubectl run -it --rm load-test --image=busybox --restart=Never -- /bin/sh
+
+# Dentro del pod, hacer requests al backend
+while true; do wget -q -O- http://backend-proyectos:8080/actuator/health; done
 ```
 
 ---
 
-## Uso con Terraform
-
-Entrar a la carpeta de infraestructura:
+## Logs y métricas
 
 ```bash
-cd infra/ep2_tres_capas
+# Logs en tiempo real por servicio
+kubectl logs -f deployment/frontend
+kubectl logs -f deployment/backend-proyectos
+kubectl logs -f deployment/backend-avances
+kubectl logs -f deployment/mysql
+
+# Ver eventos del cluster (útil para debug)
+kubectl get events --sort-by='.lastTimestamp'
+
+# Métricas de uso de recursos
+kubectl top pods
+kubectl top nodes
 ```
 
-Inicializar Terraform:
+---
+
+## Comandos útiles para la defensa
 
 ```bash
-terraform init
+# Ver todos los recursos desplegados
+kubectl get all
+
+# Ver pods con nodo asignado
+kubectl get pods -o wide
+
+# Describir un deployment
+kubectl describe deployment backend-proyectos
+
+# Ver el Service del frontend con su URL pública
+kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+# Reiniciar un deployment (simular redeploy)
+kubectl rollout restart deployment/backend-proyectos
+
+# Ver historial de rollouts
+kubectl rollout history deployment/backend-proyectos
 ```
 
-Validar configuración:
+---
+
+## Secrets en Kubernetes
+
+Los secrets de MySQL **nunca** están hardcodeados en los manifiestos. El pipeline los inyecta en el cluster usando:
 
 ```bash
-terraform validate
+kubectl create secret generic mysql-secret \
+  --from-literal=MYSQL_ROOT_PASSWORD=... \
+  --from-literal=MYSQL_DATABASE=...     \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-Revisar plan:
+Los pods los consumen como variables de entorno a través de `secretKeyRef`, sin que el valor quede expuesto en el código.
+
+---
+
+## Limpieza de recursos
+
+Para no gastar créditos AWS Academy cuando no se usa:
 
 ```bash
-terraform plan
-```
+# Eliminar deployments (mantiene el cluster)
+kubectl delete -f infra/k8s/
 
-Crear infraestructura:
-
-```bash
-terraform apply
-```
-
-Ver outputs:
-
-```bash
-terraform output
-```
-
-Eliminar infraestructura:
-
-```bash
+# Eliminar toda la infraestructura
+cd infra/ep3_eks
 terraform destroy
 ```
 
 ---
 
-## Diagrama de arquitectura
+## Diferencias respecto al EP2
 
-El flujo general de la arquitectura es:
-
-```text
-Usuario / Navegador
-        ↓
-Internet Gateway
-        ↓
-EC2 Frontend pública
-        ↓
-EC2 Backend privada
-        ↓
-EC2 Data privada con MySQL
-```
-
-Flujo DevOps:
-
-```text
-GitHub Actions → Amazon ECR → AWS SSM → EC2
-```
-
-Para agregar el diagrama al README:
-
-```markdown
-![Diagrama de arquitectura](docs/arquitectura-aws-3-capas.png)
-```
-
----
-
-## Buenas prácticas incluidas
-
-* Separación en 3 capas: Frontend, Backend y Data.
-* Frontend en subred pública.
-* Backend y Data en subred privada.
-* Security Groups separados por capa.
-* Base de datos accesible solo desde Backend.
-* NAT Gateway para salida a Internet desde recursos privados.
-* Imágenes Docker almacenadas en ECR.
-* Despliegue automatizado con GitHub Actions.
-* Uso de SSM para ejecutar comandos remotos en EC2.
-* Variables y outputs organizados en Terraform.
-
----
-
-## Mejoras futuras
-
-* Separar Backend y Data en subredes privadas distintas.
-* Agregar Application Load Balancer.
-* Migrar de EC2 a ECS Fargate.
-* Usar Amazon RDS en lugar de MySQL en EC2.
-* Configurar envío real de logs de contenedores a CloudWatch.
-* Agregar HTTPS con AWS Certificate Manager.
-* Usar un backend remoto para el estado de Terraform.
-
----
-
-## Resumen
-
-Este proyecto implementa una arquitectura AWS de 3 capas usando **Terraform, Docker, EC2, ECR, GitHub Actions, SSM, NAT Gateway, Security Groups y CloudWatch Logs**.
-
-La solución permite desplegar una aplicación web completa, manteniendo el backend y la base de datos protegidos en una subred privada y automatizando el despliegue mediante CI/CD.
+| Aspecto | EP2 (EC2 + Docker Compose) | EP3 (EKS + Kubernetes) |
+|---------|--------------------------|------------------------|
+| Orquestación | Manual (SSM + docker compose up) | Kubernetes automático |
+| Autoscaling | No | HPA (CPU 50%, 2-5 réplicas) |
+| Alta disponibilidad | No (1 instancia por capa) | Sí (múltiples pods en 2 AZ) |
+| Recuperación ante fallos | Manual | Automática (K8s reinicia pods) |
+| Deploy | SSM RunCommand | kubectl set image |
+| Logs | docker logs en EC2 | kubectl logs + CloudWatch |
+| Secrets | Variables en SSM scripts | Kubernetes Secrets |

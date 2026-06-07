@@ -1,0 +1,81 @@
+# ============================================================
+# Backend Proyectos - Spring Boot puerto 8080
+# Deployment + Service ClusterIP
+# La imagen real se inyecta en el pipeline con kubectl set image
+# ============================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-proyectos
+  labels:
+    app: backend-proyectos
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend-proyectos
+  template:
+    metadata:
+      labels:
+        app: backend-proyectos
+        tier: backend
+    spec:
+      containers:
+        - name: backend-proyectos
+          # Placeholder: el pipeline sobreescribe con kubectl set image
+          image: backend-proyectos:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql:3306/innovatech_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+          # Liveness: reinicia el pod si la app queda colgada
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 4
+          # Readiness: solo recibe tráfico cuando Spring está listo
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-proyectos
+  labels:
+    app: backend-proyectos
+    tier: backend
+spec:
+  selector:
+    app: backend-proyectos
+  ports:
+    - port: 8080
+      targetPort: 8080
+  # ClusterIP: solo el frontend (nginx proxy) llega aquí
+  type: ClusterIP

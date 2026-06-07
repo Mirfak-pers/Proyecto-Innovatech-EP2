@@ -1,0 +1,78 @@
+# ============================================================
+# Backend Avances - Spring Boot puerto 8081
+# Deployment + Service ClusterIP
+# La imagen real se inyecta en el pipeline con kubectl set image
+# ============================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-avances
+  labels:
+    app: backend-avances
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend-avances
+  template:
+    metadata:
+      labels:
+        app: backend-avances
+        tier: backend
+    spec:
+      containers:
+        - name: backend-avances
+          # Placeholder: el pipeline sobreescribe con kubectl set image
+          image: backend-avances:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://mysql:3306/innovatech_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "root"
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: MYSQL_ROOT_PASSWORD
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 4
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-avances
+  labels:
+    app: backend-avances
+    tier: backend
+spec:
+  selector:
+    app: backend-avances
+  ports:
+    - port: 8081
+      targetPort: 8081
+  type: ClusterIP
