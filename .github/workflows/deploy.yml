@@ -101,9 +101,10 @@ jobs:
       - name: Aplicar Secret de MySQL
         run: |
           kubectl delete secret mysql-secret --ignore-not-found
+
           kubectl create secret generic mysql-secret \
-            --from-literal=MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }} \
-            --from-literal=MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }}
+            --from-literal=MYSQL_ROOT_PASSWORD="${{ secrets.MYSQL_ROOT_PASSWORD }}" \
+            --from-literal=MYSQL_DATABASE="${{ secrets.MYSQL_DATABASE }}"
 
       # ----------------------------------------------------------
       # 8. Crear imagePullSecret para ECR
