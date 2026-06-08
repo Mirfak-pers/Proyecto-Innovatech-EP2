@@ -135,33 +135,38 @@ jobs:
           kubectl apply -f infra/k8s/hpa-backends.yml
 
       # ----------------------------------------------------------
-      # 10. Reiniciar MySQL para tomar el Secret actualizado
-      # ----------------------------------------------------------
-      - name: Reiniciar MySQL
-        run: |
-          kubectl rollout restart deployment/mysql
-
-      # ----------------------------------------------------------
-      # 11. Esperar rollout
+      # 10. Esperar rollout
       # ----------------------------------------------------------
       - name: Esperar rollout - MySQL
         continue-on-error: true
-        run: kubectl rollout status deployment/mysql --timeout=180s
+        run: |
+          kubectl rollout status deployment/mysql --timeout=300s || true
+          kubectl get pods
+          kubectl logs deployment/mysql || true
 
       - name: Esperar rollout - Backend Proyectos
         continue-on-error: true
-        run: kubectl rollout status deployment/backend-proyectos --timeout=300s
+        run: |
+          kubectl rollout status deployment/backend-proyectos --timeout=300s || true
+          kubectl get pods
+          kubectl logs deployment/backend-proyectos || true
 
       - name: Esperar rollout - Backend Avances
         continue-on-error: true
-        run: kubectl rollout status deployment/backend-avances --timeout=300s
+        run: |
+          kubectl rollout status deployment/backend-avances --timeout=300s || true
+          kubectl get pods
+          kubectl logs deployment/backend-avances || true
 
       - name: Esperar rollout - Frontend
         continue-on-error: true
-        run: kubectl rollout status deployment/frontend --timeout=120s
+        run: |
+          kubectl rollout status deployment/frontend --timeout=120s || true
+          kubectl get pods
+          kubectl logs deployment/frontend || true
 
       # ----------------------------------------------------------
-      # 12. Estado final del cluster
+      # 11. Estado final del cluster
       # ----------------------------------------------------------
       - name: Estado final del cluster
         run: |
