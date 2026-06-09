@@ -5,16 +5,15 @@
 
 # Java / Maven
 target/
-backend/target/
-backend-proyectos/target/
-backend-avances/target/
+back-Ventas_SpringBoot/Springboot-API-REST/target/
+back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO/target/
 */target/
 *.class
 
 # Node / Vite
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
+front_despacho/node_modules/
+front_despacho/dist/
+front_despacho/.vite/
 node_modules/
 dist/
 

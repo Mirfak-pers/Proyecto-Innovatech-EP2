@@ -1,23 +1,12 @@
-# ============================================================
-# HorizontalPodAutoscaler - Backend Proyectos
-#
-# Escala entre 2 y 5 réplicas cuando la CPU supera el 50%.
-# Justificación del umbral:
-#   - Spring Boot tiene picos de CPU al inicializar conexiones JPA.
-#   - 50% permite absorber una ráfaga antes de escalar,
-#     sin desperdiciar nodos cuando la carga es baja.
-#   - min=2 garantiza alta disponibilidad (un pod por AZ).
-# ============================================================
-
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: hpa-backend-proyectos
+  name: hpa-backend-ventas
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: backend-proyectos
+    name: backend-ventas
   minReplicas: 2
   maxReplicas: 5
   metrics:
@@ -29,20 +18,15 @@ spec:
           averageUtilization: 50
 
 ---
-# ============================================================
-# HorizontalPodAutoscaler - Backend Avances
-# Misma lógica de escalado que Proyectos.
-# ============================================================
-
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: hpa-backend-avances
+  name: hpa-backend-despachos
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: backend-avances
+    name: backend-despachos
   minReplicas: 2
   maxReplicas: 5
   metrics:

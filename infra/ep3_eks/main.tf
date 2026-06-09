@@ -224,8 +224,8 @@ resource "aws_ecr_repository" "frontend" {
   }
 }
 
-resource "aws_ecr_repository" "proyectos_backend" {
-  name                 = "${var.project_name}-proyectos-backend"
+resource "aws_ecr_repository" "ventas_backend" {
+  name                 = "${var.project_name}-ventas-backend"
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 
@@ -234,15 +234,15 @@ resource "aws_ecr_repository" "proyectos_backend" {
   }
 
   tags = {
-    Name    = "${var.project_name}-proyectos-backend"
+    Name    = "${var.project_name}-ventas-backend"
     Project = var.project_name
     Stage   = "EP3"
-    Service = "Proyectos"
+    Service = "Ventas"
   }
 }
 
-resource "aws_ecr_repository" "avances_backend" {
-  name                 = "${var.project_name}-avances-backend"
+resource "aws_ecr_repository" "despachos_backend" {
+  name                 = "${var.project_name}-despachos-backend"
   image_tag_mutability = "MUTABLE"
   force_delete         = true
 
@@ -251,10 +251,10 @@ resource "aws_ecr_repository" "avances_backend" {
   }
 
   tags = {
-    Name    = "${var.project_name}-avances-backend"
+    Name    = "${var.project_name}-despachos-backend"
     Project = var.project_name
     Stage   = "EP3"
-    Service = "Avances"
+    Service = "Despachos"
   }
 }
 
@@ -277,12 +277,12 @@ resource "aws_cloudwatch_log_group" "app_frontend" {
   retention_in_days = 7
 }
 
-resource "aws_cloudwatch_log_group" "app_proyectos" {
-  name              = "/${var.project_name}/proyectos-backend"
+resource "aws_cloudwatch_log_group" "app_ventas" {
+  name              = "/${var.project_name}/ventas-backend"
   retention_in_days = 7
 }
 
-resource "aws_cloudwatch_log_group" "app_avances" {
-  name              = "/${var.project_name}/avances-backend"
+resource "aws_cloudwatch_log_group" "app_despachos" {
+  name              = "/${var.project_name}/despachos-backend"
   retention_in_days = 7
 }

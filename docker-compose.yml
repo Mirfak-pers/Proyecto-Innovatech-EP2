@@ -11,22 +11,24 @@ services:
     networks:
       - innovatech-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 20s
+      start_period: 30s
 
-  proyectos-backend:
+  backend-ventas:
     build:
-      context: ./backend-proyectos
-    image: innovatech-proyectos-backend:local
-    container_name: innovatech-proyectos-backend
+      context: ./back-Ventas_SpringBoot/Springboot-API-REST
+    image: innovatech-ventas-backend:local
+    container_name: innovatech-ventas-backend
     restart: unless-stopped
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DB_ENDPOINT: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     depends_on:
       mysql:
         condition: service_healthy
@@ -35,16 +37,18 @@ services:
     networks:
       - innovatech-net
 
-  avances-backend:
+  backend-despachos:
     build:
-      context: ./backend-avances
-    image: innovatech-avances-backend:local
-    container_name: innovatech-avances-backend
+      context: ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+    image: innovatech-despachos-backend:local
+    container_name: innovatech-despachos-backend
     restart: unless-stopped
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      DB_ENDPOINT: mysql
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE}
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     depends_on:
       mysql:
         condition: service_healthy
@@ -55,18 +59,18 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-    image: innovatech-frontend:local
-    container_name: innovatech-frontend
+      context: ./front_despacho
+    image: innovatech-front-despacho:local
+    container_name: innovatech-front-despacho
     restart: unless-stopped
     environment:
-      BACKEND_PROYECTOS_URL: ${BACKEND_PROYECTOS_URL:-http://proyectos-backend:8080}
-      BACKEND_AVANCES_URL: ${BACKEND_AVANCES_URL:-http://avances-backend:8081}
+      BACKEND_VENTAS_URL: ${BACKEND_VENTAS_URL:-http://backend-ventas:8080}
+      BACKEND_DESPACHOS_URL: ${BACKEND_DESPACHOS_URL:-http://backend-despachos:8081}
     ports:
       - "3000:8080"
     depends_on:
-      - proyectos-backend
-      - avances-backend
+      - backend-ventas
+      - backend-despachos
     networks:
       - innovatech-net
 

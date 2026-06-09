@@ -1,8 +1,5 @@
-# ============================================================
-# MySQL - Base de datos compartida para Proyectos y Avances
-# Sin PersistentVolumeClaim (AWS Academy no lo soporta).
-# Solo accesible dentro del cluster (ClusterIP).
-# ============================================================
+# MySQL - Base de datos compartida para Ventas y Despachos
+# Sin PersistentVolumeClaim para mantener compatibilidad con AWS Academy.
 
 apiVersion: apps/v1
 kind: Deployment
@@ -13,6 +10,8 @@ metadata:
     tier: data
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mysql
@@ -43,10 +42,11 @@ spec:
               command:
                 - sh
                 - -c
-                - "mysqladmin ping -h localhost -p$MYSQL_ROOT_PASSWORD"
-            initialDelaySeconds: 30
+                - mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"
+            initialDelaySeconds: 40
             periodSeconds: 10
-            failureThreshold: 6
+            timeoutSeconds: 5
+            failureThreshold: 10
           resources:
             requests:
               cpu: "250m"

@@ -13,14 +13,14 @@ output "frontend_ecr_url" {
   value       = aws_ecr_repository.frontend.repository_url
 }
 
-output "proyectos_backend_ecr_url" {
-  description = "URL del repositorio ECR del Backend Proyectos"
-  value       = aws_ecr_repository.proyectos_backend.repository_url
+output "ventas_backend_ecr_url" {
+  description = "URL del repositorio ECR del Backend Ventas"
+  value       = aws_ecr_repository.ventas_backend.repository_url
 }
 
-output "avances_backend_ecr_url" {
-  description = "URL del repositorio ECR del Backend Avances"
-  value       = aws_ecr_repository.avances_backend.repository_url
+output "despachos_backend_ecr_url" {
+  description = "URL del repositorio ECR del Backend Despachos"
+  value       = aws_ecr_repository.despachos_backend.repository_url
 }
 
 output "kubeconfig_command" {
