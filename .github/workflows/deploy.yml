@@ -19,9 +19,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ----------------------------------------------------------
+      # 1. Descargar repositorio
+      # ----------------------------------------------------------
       - name: Descargar repositorio
         uses: actions/checkout@v4
 
+      # ----------------------------------------------------------
+      # 2. Configurar credenciales AWS Academy
+      # ----------------------------------------------------------
       - name: Configurar credenciales AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -30,9 +36,15 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # ----------------------------------------------------------
+      # 3. Login en Amazon ECR
+      # ----------------------------------------------------------
       - name: Login en Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
+      # ----------------------------------------------------------
+      # 4. Construir URLs de repositorios ECR
+      # ----------------------------------------------------------
       - name: Construir URLs de repositorios ECR
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -41,9 +53,15 @@ jobs:
           echo "VENTAS_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-ventas-backend" >> $GITHUB_ENV
           echo "DESPACHOS_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-despachos-backend" >> $GITHUB_ENV
 
+      # ----------------------------------------------------------
+      # 5. Configurar Docker Buildx
+      # ----------------------------------------------------------
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # ----------------------------------------------------------
+      # 6. Build y Push - Backend Ventas
+      # ----------------------------------------------------------
       - name: Build y Push - Backend Ventas
         uses: docker/build-push-action@v6
         with:
@@ -52,6 +70,9 @@ jobs:
           push: true
           tags: ${{ env.VENTAS_ECR }}:${{ github.sha }}
 
+      # ----------------------------------------------------------
+      # 7. Build y Push - Backend Despachos
+      # ----------------------------------------------------------
       - name: Build y Push - Backend Despachos
         uses: docker/build-push-action@v6
         with:
@@ -60,6 +81,9 @@ jobs:
           push: true
           tags: ${{ env.DESPACHOS_ECR }}:${{ github.sha }}
 
+      # ----------------------------------------------------------
+      # 8. Build y Push - Frontend Despacho
+      # ----------------------------------------------------------
       - name: Build y Push - Frontend Despacho
         uses: docker/build-push-action@v6
         with:
@@ -68,24 +92,48 @@ jobs:
           push: true
           tags: ${{ env.FRONTEND_ECR }}:${{ github.sha }}
 
+      # ----------------------------------------------------------
+      # 9. Instalar kubectl
+      # ----------------------------------------------------------
       - name: Instalar kubectl
         uses: azure/setup-kubectl@v4
 
+      # ----------------------------------------------------------
+      # 10. Conectar kubectl al cluster EKS
+      # ----------------------------------------------------------
       - name: Conectar kubectl al cluster EKS
         run: |
-          aws eks update-kubeconfig             --region ${{ env.AWS_REGION }}             --name ${{ env.CLUSTER_NAME }}
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name ${{ env.CLUSTER_NAME }}
 
+      # ----------------------------------------------------------
+      # 11. Aplicar Secret de MySQL
+      # ----------------------------------------------------------
       - name: Aplicar Secret de MySQL
         run: |
-          kubectl create secret generic mysql-secret             --from-literal=MYSQL_ROOT_PASSWORD="${{ secrets.MYSQL_ROOT_PASSWORD }}"             --from-literal=MYSQL_DATABASE="${{ secrets.MYSQL_DATABASE }}"             --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic mysql-secret \
+            --from-literal=MYSQL_ROOT_PASSWORD="${{ secrets.MYSQL_ROOT_PASSWORD }}" \
+            --from-literal=MYSQL_DATABASE="${{ secrets.MYSQL_DATABASE }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
+      # ----------------------------------------------------------
+      # 12. Crear imagePullSecret para ECR
+      # ----------------------------------------------------------
       - name: Crear imagePullSecret para ECR
         run: |
           ECR_TOKEN=$(aws ecr get-login-password --region ${{ env.AWS_REGION }})
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-          kubectl create secret docker-registry ecr-secret             --docker-server=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com             --docker-username=AWS             --docker-password=${ECR_TOKEN}             --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret docker-registry ecr-secret \
+            --docker-server=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com \
+            --docker-username=AWS \
+            --docker-password=${ECR_TOKEN} \
+            --dry-run=client -o yaml | kubectl apply -f -
 
+      # ----------------------------------------------------------
+      # 13. Aplicar manifiestos Kubernetes con imágenes versionadas por SHA
+      # ----------------------------------------------------------
       - name: Aplicar manifiestos Kubernetes con imágenes versionadas por SHA
         run: |
           sed -i "s|image: backend-ventas:latest|image: ${{ env.VENTAS_ECR }}:${{ github.sha }}|g" infra/k8s/backend-ventas.yml
@@ -98,6 +146,9 @@ jobs:
           kubectl apply -f infra/k8s/frontend.yml
           kubectl apply -f infra/k8s/hpa-backends.yml
 
+      # ----------------------------------------------------------
+      # 14. Esperar rollout - MySQL
+      # ----------------------------------------------------------
       - name: Esperar rollout - MySQL
         continue-on-error: true
         run: |
@@ -105,6 +156,9 @@ jobs:
           kubectl get pods
           kubectl logs deployment/mysql || true
 
+      # ----------------------------------------------------------
+      # 15. Esperar rollout - Backend Ventas
+      # ----------------------------------------------------------
       - name: Esperar rollout - Backend Ventas
         continue-on-error: true
         run: |
@@ -112,6 +166,9 @@ jobs:
           kubectl get pods
           kubectl logs deployment/backend-ventas || true
 
+      # ----------------------------------------------------------
+      # 16. Esperar rollout - Backend Despachos
+      # ----------------------------------------------------------
       - name: Esperar rollout - Backend Despachos
         continue-on-error: true
         run: |
@@ -119,6 +176,9 @@ jobs:
           kubectl get pods
           kubectl logs deployment/backend-despachos || true
 
+      # ----------------------------------------------------------
+      # 17. Esperar rollout - Frontend
+      # ----------------------------------------------------------
       - name: Esperar rollout - Frontend
         continue-on-error: true
         run: |
@@ -126,6 +186,9 @@ jobs:
           kubectl get pods
           kubectl logs deployment/frontend || true
 
+      # ----------------------------------------------------------
+      # 18. Estado final del cluster
+      # ----------------------------------------------------------
       - name: Estado final del cluster
         run: |
           echo "====== PODS ======"
@@ -141,5 +204,6 @@ jobs:
 
           echo ""
           echo "====== URL PUBLICA DEL FRONTEND ======"
-          kubectl get service frontend             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+          kubectl get service frontend \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
           echo ""
