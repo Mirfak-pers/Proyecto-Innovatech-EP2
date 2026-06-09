@@ -40,6 +40,7 @@ jobs:
       # 3. Login ECR
       # ----------------------------------------------------------
       - name: Login en Amazon ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       # ----------------------------------------------------------
@@ -48,13 +49,12 @@ jobs:
       - name: Construir URLs de repositorios ECR
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
           echo "FRONTEND_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-frontend" >> $GITHUB_ENV
           echo "PROYECTOS_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-proyectos-backend" >> $GITHUB_ENV
           echo "AVANCES_ECR=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${PROJECT_NAME}-avances-backend" >> $GITHUB_ENV
 
       # ----------------------------------------------------------
-      # 5. Build y Push de las 3 imágenes con SHA del commit
+      # 5. Build y Push de las 3 imágenes
       # ----------------------------------------------------------
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -96,23 +96,24 @@ jobs:
             --name ${{ env.CLUSTER_NAME }}
 
       # ----------------------------------------------------------
-      # 7. Crear Secret de MySQL
+      # 7. Crear Secret de MySQL (idempotente)
       # ----------------------------------------------------------
       - name: Aplicar Secret de MySQL
         run: |
           kubectl create secret generic mysql-secret \
-            --from-literal=MYSQL_ROOT_PASSWORD="${{ secrets.MYSQL_ROOT_PASSWORD }}" \
-            --from-literal=MYSQL_DATABASE="${{ secrets.MYSQL_DATABASE }}" \
+            --from-literal=MYSQL_ROOT_PASSWORD=${{ secrets.MYSQL_ROOT_PASSWORD }} \
+            --from-literal=MYSQL_DATABASE=${{ secrets.MYSQL_DATABASE }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ----------------------------------------------------------
       # 8. Crear imagePullSecret para ECR
+      #    Los nodos de AWS Academy no tienen acceso automático a ECR,
+      #    por lo que cada pod necesita este secret para autenticarse.
       # ----------------------------------------------------------
       - name: Crear imagePullSecret para ECR
         run: |
           ECR_TOKEN=$(aws ecr get-login-password --region ${{ env.AWS_REGION }})
           ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
           kubectl create secret docker-registry ecr-secret \
             --docker-server=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com \
             --docker-username=AWS \
@@ -120,14 +121,10 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ----------------------------------------------------------
-      # 9. Aplicar manifiestos Kubernetes usando imágenes con SHA
+      # 9. Aplicar manifiestos Kubernetes
       # ----------------------------------------------------------
-      - name: Aplicar manifiestos Kubernetes con imágenes versionadas por SHA
+      - name: Aplicar manifiestos Kubernetes
         run: |
-          sed -i "s|image: backend-proyectos:latest|image: ${{ env.PROYECTOS_ECR }}:${{ github.sha }}|g" infra/k8s/backend-proyectos.yml
-          sed -i "s|image: backend-avances:latest|image: ${{ env.AVANCES_ECR }}:${{ github.sha }}|g" infra/k8s/backend-avances.yml
-          sed -i "s|image: frontend:latest|image: ${{ env.FRONTEND_ECR }}:${{ github.sha }}|g" infra/k8s/frontend.yml
-
           kubectl apply -f infra/k8s/mysql.yml
           kubectl apply -f infra/k8s/backend-proyectos.yml
           kubectl apply -f infra/k8s/backend-avances.yml
@@ -135,38 +132,41 @@ jobs:
           kubectl apply -f infra/k8s/hpa-backends.yml
 
       # ----------------------------------------------------------
-      # 10. Esperar rollout
+      # 10. Actualizar imagen con el SHA del commit
       # ----------------------------------------------------------
-      - name: Esperar rollout - MySQL
-        continue-on-error: true
+      - name: Actualizar imagen - Backend Proyectos
         run: |
-          kubectl rollout status deployment/mysql --timeout=300s || true
-          kubectl get pods
-          kubectl logs deployment/mysql || true
+          kubectl set image deployment/backend-proyectos \
+            backend-proyectos=${{ env.PROYECTOS_ECR }}:${{ github.sha }}
 
+      - name: Actualizar imagen - Backend Avances
+        run: |
+          kubectl set image deployment/backend-avances \
+            backend-avances=${{ env.AVANCES_ECR }}:${{ github.sha }}
+
+      - name: Actualizar imagen - Frontend
+        run: |
+          kubectl set image deployment/frontend \
+            frontend=${{ env.FRONTEND_ECR }}:${{ github.sha }}
+
+      # ----------------------------------------------------------
+      # 11. Esperar rollout (continue-on-error para no cortar el pipeline
+      #     si Spring Boot tarda más de lo esperado en arrancar)
+      # ----------------------------------------------------------
       - name: Esperar rollout - Backend Proyectos
         continue-on-error: true
-        run: |
-          kubectl rollout status deployment/backend-proyectos --timeout=300s || true
-          kubectl get pods
-          kubectl logs deployment/backend-proyectos || true
+        run: kubectl rollout status deployment/backend-proyectos --timeout=300s
 
       - name: Esperar rollout - Backend Avances
         continue-on-error: true
-        run: |
-          kubectl rollout status deployment/backend-avances --timeout=300s || true
-          kubectl get pods
-          kubectl logs deployment/backend-avances || true
+        run: kubectl rollout status deployment/backend-avances --timeout=300s
 
       - name: Esperar rollout - Frontend
         continue-on-error: true
-        run: |
-          kubectl rollout status deployment/frontend --timeout=120s || true
-          kubectl get pods
-          kubectl logs deployment/frontend || true
+        run: kubectl rollout status deployment/frontend --timeout=120s
 
       # ----------------------------------------------------------
-      # 11. Estado final del cluster
+      # 12. Estado final del cluster
       # ----------------------------------------------------------
       - name: Estado final del cluster
         run: |
