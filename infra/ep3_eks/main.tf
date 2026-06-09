@@ -178,19 +178,24 @@ resource "aws_eks_node_group" "workers" {
   node_group_name = "${var.project_name}-workers"
   node_role_arn   = data.aws_iam_role.labrole.arn
 
-  subnet_ids = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+  subnet_ids = [
+    aws_subnet.public_a.id,
+    aws_subnet.public_b.id
+  ]
 
   # t3.medium es el mínimo recomendado para correr Spring Boot en K8s
   instance_types = ["t3.medium"]
   capacity_type  = "ON_DEMAND"
 
+  # En AWS Academy es mejor partir con 1 nodo para evitar bloqueos al crear el Node Group.
+  # El max_size permite escalar hasta 2 si se necesita.
   scaling_config {
-    desired_size = 2
+    desired_size = 1
     min_size     = 1
-    max_size     = 4
+    max_size     = 2
   }
 
-  # Permite rolling updates sin downtime
+  # Permite rolling updates sin dejar todos los nodos fuera a la vez
   update_config {
     max_unavailable = 1
   }
@@ -201,7 +206,11 @@ resource "aws_eks_node_group" "workers" {
     Stage   = "EP3"
   }
 
-  depends_on = [aws_eks_cluster.main]
+  depends_on = [
+    aws_eks_cluster.main,
+    aws_route_table_association.public_a,
+    aws_route_table_association.public_b
+  ]
 }
 
 # ------------------------------------------------------------
