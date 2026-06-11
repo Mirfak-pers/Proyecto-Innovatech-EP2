@@ -1,8 +1,9 @@
 # ============================================================
 # Innovatech Chile - EP3 DevOps
 # Orquestación con AWS EKS (Elastic Kubernetes Service)
-# Incluye: VPC, subnets públicas en 2 AZ, IGW, EKS cluster,
-#          Node Group (autoscaling), ECR x3, CloudWatch Logs.
+# Incluye: VPC, subredes publicas y privadas en 2 AZ, IGW,
+#          NAT Gateway, EKS cluster, Node Group privado,
+#          ECR x3, CloudWatch Logs.
 # ============================================================
 
 terraform {
@@ -48,6 +49,10 @@ resource "aws_vpc" "main" {
   }
 }
 
+# ------------------------------------------------------------
+# Subredes publicas para Load Balancer y NAT Gateway
+# ------------------------------------------------------------
+
 resource "aws_subnet" "public_a" {
   vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.10.0/24"
@@ -59,6 +64,7 @@ resource "aws_subnet" "public_a" {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                    = "1"
     Project                                     = var.project_name
+    Tier                                        = "public"
   }
 }
 
@@ -73,8 +79,47 @@ resource "aws_subnet" "public_b" {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
     "kubernetes.io/role/elb"                    = "1"
     Project                                     = var.project_name
+    Tier                                        = "public"
   }
 }
+
+# ------------------------------------------------------------
+# Subredes privadas para nodos EKS y pods
+# ------------------------------------------------------------
+
+resource "aws_subnet" "private_a" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.30.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name                                        = "${var.project_name}-private-a"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
+    Project                                     = var.project_name
+    Tier                                        = "private"
+  }
+}
+
+resource "aws_subnet" "private_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.40.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name                                        = "${var.project_name}-private-b"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/internal-elb"           = "1"
+    Project                                     = var.project_name
+    Tier                                        = "private"
+  }
+}
+
+# ------------------------------------------------------------
+# Internet Gateway para subredes publicas
+# ------------------------------------------------------------
 
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
@@ -84,6 +129,37 @@ resource "aws_internet_gateway" "igw" {
     Project = var.project_name
   }
 }
+
+# ------------------------------------------------------------
+# NAT Gateway para salida a internet desde subredes privadas
+# ------------------------------------------------------------
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+
+  tags = {
+    Name    = "${var.project_name}-nat-eip"
+    Project = var.project_name
+  }
+
+  depends_on = [aws_internet_gateway.igw]
+}
+
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public_a.id
+
+  tags = {
+    Name    = "${var.project_name}-nat-gateway"
+    Project = var.project_name
+  }
+
+  depends_on = [aws_internet_gateway.igw]
+}
+
+# ------------------------------------------------------------
+# Tabla de rutas publica: salida directa por Internet Gateway
+# ------------------------------------------------------------
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -107,6 +183,34 @@ resource "aws_route_table_association" "public_a" {
 resource "aws_route_table_association" "public_b" {
   subnet_id      = aws_subnet.public_b.id
   route_table_id = aws_route_table.public.id
+}
+
+# ------------------------------------------------------------
+# Tabla de rutas privada: salida controlada por NAT Gateway
+# ------------------------------------------------------------
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
+
+  tags = {
+    Name    = "${var.project_name}-private-rt"
+    Project = var.project_name
+  }
+}
+
+resource "aws_route_table_association" "private_a" {
+  subnet_id      = aws_subnet.private_a.id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "private_b" {
+  subnet_id      = aws_subnet.private_b.id
+  route_table_id = aws_route_table.private.id
 }
 
 # ------------------------------------------------------------
@@ -156,7 +260,13 @@ resource "aws_eks_cluster" "main" {
   role_arn = data.aws_iam_role.labrole.arn
 
   vpc_config {
-    subnet_ids              = [aws_subnet.public_a.id, aws_subnet.public_b.id]
+    subnet_ids = [
+      aws_subnet.public_a.id,
+      aws_subnet.public_b.id,
+      aws_subnet.private_a.id,
+      aws_subnet.private_b.id
+    ]
+
     security_group_ids      = [aws_security_group.eks_nodes.id]
     endpoint_public_access  = true
     endpoint_private_access = false
@@ -178,9 +288,11 @@ resource "aws_eks_node_group" "workers" {
   node_group_name = "${var.project_name}-workers"
   node_role_arn   = data.aws_iam_role.labrole.arn
 
+  # Los nodos worker quedan en subredes privadas.
+  # El acceso publico entra por el Load Balancer en subredes publicas.
   subnet_ids = [
-    aws_subnet.public_a.id,
-    aws_subnet.public_b.id
+    aws_subnet.private_a.id,
+    aws_subnet.private_b.id
   ]
 
   # t3.medium es el mínimo recomendado para correr Spring Boot en K8s
@@ -209,7 +321,10 @@ resource "aws_eks_node_group" "workers" {
   depends_on = [
     aws_eks_cluster.main,
     aws_route_table_association.public_a,
-    aws_route_table_association.public_b
+    aws_route_table_association.public_b,
+    aws_route_table_association.private_a,
+    aws_route_table_association.private_b,
+    aws_nat_gateway.nat
   ]
 }
 
