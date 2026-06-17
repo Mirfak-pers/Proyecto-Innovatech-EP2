@@ -34,14 +34,6 @@ MYSQL_ROOT_PASSWORD
 MYSQL_DATABASE
 ```
 
-Ejemplo para MySQL:
-
-```text
-MYSQL_ROOT_PASSWORD = admin12345
-MYSQL_DATABASE = innovatech_db
-```
-
-Sin comillas.
 
 ## Despliegue paso a paso
 
@@ -99,13 +91,6 @@ Ve a tu repo → **Settings → Secrets and variables → Actions** y actualiza 
 | `AWS_ACCESS_KEY_ID` | Tu key actual |
 | `AWS_SECRET_ACCESS_KEY` | Tu secret actual |
 | `AWS_SESSION_TOKEN` | Tu token actual |
-
-Verifica que estos dos ya existen (si no, créalos):
-
-| Secret | Valor |
-|---|---|
-| `MYSQL_ROOT_PASSWORD` | `Innovatech2025!` |
-| `MYSQL_DATABASE` | `innovatech_db` |
 
 ### 6. Disparar el pipeline
 
