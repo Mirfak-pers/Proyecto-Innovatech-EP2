@@ -1,4 +1,4 @@
-# Innovatech EP3 - EKS, ECR y GitHub Actions
+
 
 Proyecto adaptado al enunciado del profesor usando la estructura original:
 
@@ -237,3 +237,4 @@ kubectl get deployments
 ```
 
 **Resultado esperado:** Kubernetes recrea los pods automáticamente y el deployment vuelve a `2/2`.
+<img width="1801" height="1282" alt="Innovatech_EP3_EKS drawio (2)" src="https://github.com/user-attachments/assets/a021883d-8e3a-469b-88e7-6f1c9db2baa6" />
