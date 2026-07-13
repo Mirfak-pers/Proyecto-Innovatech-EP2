@@ -1,6 +1,6 @@
 
 
-Proyecto adaptado al enunciado del profesor usando la estructura original:
+
 
 ```text
 back-Ventas_SpringBoot/Springboot-API-REST
